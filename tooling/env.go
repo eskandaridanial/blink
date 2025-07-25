@@ -1,23 +1,19 @@
 package tooling
 
-import "os"
+import (
+	"os"
+)
 
-// function 'EnvOrKey' returns the value of the environment variable with the given key,
-// if the environment variable is unset, it returns the key name itself
 func EnvOrKey(key string) string {
-	val := os.Getenv(key)
-	if val == "" {
-		return "$" + key
+	if val := os.Getenv(key); val != "" {
+		return val
 	}
-	return val
+	return "$" + key
 }
 
-// function 'EnvOrDefault' returns the value of the environment variable with the given key,
-// if the environment variable is unset, it returns the default value
-func EnvOrDefault(key string, defaultValue string) string {
-	val := os.Getenv(key)
-	if val == "" {
-		return defaultValue
+func EnvOrDefault(key, defaultValue string) string {
+	if val := os.Getenv(key); val != "" {
+		return val
 	}
-	return val
+	return defaultValue
 }
