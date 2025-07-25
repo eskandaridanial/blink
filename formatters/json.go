@@ -1,30 +1,42 @@
 package formatters
 
 import (
+	"bytes"
 	"encoding/json"
+	"sync"
 	"time"
 
 	"github.com/eskandaridanial/blink/models"
 )
 
+var jsonPool = sync.Pool{
+	New: func() any {
+		return new(bytes.Buffer)
+	},
+}
+
 type JsonFormatter struct{}
 
-func (f *JsonFormatter) Format(record models.Record) []byte {
-	out := make(map[string]any, 6)
-	out["level"] = record.Level.String()
-	out["timestamp"] = record.Timestamp.Format(time.RFC3339)
-	out["caller"] = record.Caller
-	out["message"] = record.Message
-	out["referenceId"] = record.ReferenceId
+func (f *JsonFormatter) Format(r models.Record) []byte {
+	buf := jsonPool.Get().(*bytes.Buffer)
+	buf.Reset()
+	defer jsonPool.Put(buf)
 
-	if len(record.Fields) > 0 {
-		fields := make(map[string]any, len(record.Fields))
-		for _, field := range record.Fields {
-			fields[field.Key] = field.Value
+	payload := make(map[string]any, 6)
+	payload["timestamp"] = r.Timestamp.Format(time.RFC3339)
+	payload["level"] = r.Level.String()
+	payload["referenceId"] = r.ReferenceId
+	payload["caller"] = r.Caller
+	payload["message"] = r.Message
+
+	if len(r.Fields) > 0 {
+		fields := make(map[string]any, len(r.Fields))
+		for _, f := range r.Fields {
+			fields[f.Key] = f.Value
 		}
-		out["fields"] = fields
+		payload["fields"] = fields
 	}
 
-	result, _ := json.Marshal(out)
-	return append(result, '\n')
+	_ = json.NewEncoder(buf).Encode(payload)
+	return append([]byte(nil), buf.Bytes()...)
 }

@@ -12,7 +12,7 @@ func main() {
 	logger := logging.NewLogger(
 		logging.WithLevel(models.Debug),
 		logging.WithField(models.String("key", "value")),
-		logging.WithHandler(&handlers.ConsoleHandler{Formatter: &formatters.TextFormatter{}}),
+		logging.WithHandler(handlers.NewConsoleHandler(&formatters.TextFormatter{})),
 		logging.WithHook(&hooks.DefaultHook{}),
 	)
 
