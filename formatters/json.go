@@ -28,10 +28,10 @@ import (
 //
 //	All methods are thread-safe and can be called concurrently from multiple goroutines.
 type JsonFormatter struct {
-	Config      Config         // Configuration controlling formatter behavior
-	WriterPool  *WriterPool    // Pool of buffered writers for efficient I/O
-	PayloadPool *PayloadPool   // Pool of maps for building Json payloads
-	Safety      *SafetyWrapper // Panic recovery wrapper for robustness
+	config      Config         // Configuration controlling formatter behavior
+	writerPool  *writerPool    // Pool of buffered writers for efficient I/O
+	payloadPool *payloadPool   // Pool of maps for building Json payloads
+	safety      *safetyWrapper // Panic recovery wrapper for robustness
 }
 
 // NewJsonFormatter creates a new Json formatter using environment configuration.
@@ -47,7 +47,7 @@ type JsonFormatter struct {
 //	formatter := NewJsonFormatter()
 //	formatter.Format(os.Stdout, logRecord)
 func NewJsonFormatter() *JsonFormatter {
-	return NewJsonFormatterWithConfig(LoadConfig())
+	return NewJsonFormatterWithConfig(loadConfig())
 }
 
 // NewJsonFormatterWithConfig creates a Json formatter with explicit configuration.
@@ -71,10 +71,10 @@ func NewJsonFormatter() *JsonFormatter {
 //	formatter := NewJsonFormatterWithConfig(config)
 func NewJsonFormatterWithConfig(config Config) *JsonFormatter {
 	return &JsonFormatter{
-		Config:      config,
-		WriterPool:  NewWriterPool(config.WriterBufferSize),
-		PayloadPool: NewPayloadPool(config.PayloadPoolSize),
-		Safety:      NewSafetyWrapper(config),
+		config:      config,
+		writerPool:  newWriterPool(config.WriterBufferSize),
+		payloadPool: newPayloadPool(config.PayloadPoolSize),
+		safety:      newSafetyWrapper(config),
 	}
 }
 
@@ -109,21 +109,21 @@ func NewJsonFormatterWithConfig(config Config) *JsonFormatter {
 //   - Encodes directly to the writer without intermediate string creation
 //   - Automatic panic recovery ensures robustness in production
 func (f *JsonFormatter) Format(w io.Writer, r models.Record) (int, error) {
-	return f.Safety.WithRecovery(w, r, func() (int, error) {
-		bufWriter := f.WriterPool.Get()
+	return f.safety.withRecovery(w, r, func() (int, error) {
+		bufWriter := f.writerPool.get()
 		defer func() {
 			bufWriter.Flush()
-			f.WriterPool.Put(bufWriter)
+			f.writerPool.put(bufWriter)
 		}()
 		bufWriter.Reset(w)
 
-		payload := f.PayloadPool.Get()
-		defer f.PayloadPool.Put(payload)
-		f.BuildPayload(payload, r)
+		payload := f.payloadPool.get()
+		defer f.payloadPool.put(payload)
+		f.buildPayload(payload, r)
 
 		encoder := json.NewEncoder(bufWriter)
-		encoder.SetEscapeHTML(f.Config.JsonEscapeHtml)
-		if !f.Config.JsonCompact {
+		encoder.SetEscapeHTML(f.config.JsonEscapeHtml)
+		if !f.config.JsonCompact {
 			encoder.SetIndent("", "  ")
 		}
 
@@ -131,7 +131,7 @@ func (f *JsonFormatter) Format(w io.Writer, r models.Record) (int, error) {
 	})
 }
 
-// BuildPayload constructs the Json payload map from a log record.
+// buildPayload constructs the Json payload map from a log record.
 // This method populates the payload map with all relevant fields from the log record,
 // respecting configuration settings for field inclusion and empty value handling.
 //
@@ -141,24 +141,24 @@ func (f *JsonFormatter) Format(w io.Writer, r models.Record) (int, error) {
 //   - message: Log message content
 //
 // Optional fields (included based on configuration):
-//   - referenceId: Correlation/trace ID (if present or IncludeEmptyFields is true)
+//   - referenceId: Correlation/trace identifier (if present or IncludeEmptyFields is true)
 //   - caller: Caller information (if present or IncludeEmptyFields is true)
-//   - fields: Structured key-value pairs (handled by BuildFields)
+//   - fields: Structured key-value pairs (handled by buildFields)
 //
 // Parameters:
 //
 //	payload map[string]any: Target map to populate (acquired from pool)
 //	r models.Record: Source log record containing data to format
-func (f *JsonFormatter) BuildPayload(payload map[string]any, r models.Record) {
-	payload["timestamp"] = r.Timestamp.Format(f.Config.TimeFormat)
+func (f *JsonFormatter) buildPayload(payload map[string]any, r models.Record) {
+	payload["timestamp"] = r.Timestamp.Format(f.config.TimeFormat)
 	payload["level"] = r.Level.String()
-	payload["message"] = r.Message
-	payload["referenceId"] = r.ReferenceId
 	payload["caller"] = r.Caller
-	f.BuildFields(payload, r.Fields)
+	payload["referenceId"] = r.ReferenceId
+	payload["message"] = r.Message
+	f.buildFields(payload, r.Fields)
 }
 
-// BuildFields constructs the fields section of the Json payload.
+// buildFields constructs the fields section of the Json payload.
 // This method handles the structured key-value pairs that provide additional
 // context for the log entry. It respects configuration settings for empty field inclusion.
 //
@@ -172,9 +172,9 @@ func (f *JsonFormatter) BuildPayload(payload map[string]any, r models.Record) {
 //
 //	payload map[string]any: Target payload map to add fields to
 //	fields []models.Field: Array of structured key-value pairs from log record
-func (f *JsonFormatter) BuildFields(payload map[string]any, fields []models.Field) {
+func (f *JsonFormatter) buildFields(payload map[string]any, fields []models.Field) {
 	if len(fields) == 0 {
-		if f.Config.IncludeEmptyFields {
+		if f.config.IncludeEmptyFields {
 			payload["fields"] = make(map[string]any)
 		}
 		return
@@ -182,12 +182,12 @@ func (f *JsonFormatter) BuildFields(payload map[string]any, fields []models.Fiel
 
 	fieldMap := make(map[string]any, len(fields))
 	for _, field := range fields {
-		if field.Key != "" || f.Config.IncludeEmptyFields {
+		if field.Key != "" || f.config.IncludeEmptyFields {
 			fieldMap[field.Key] = field.Value
 		}
 	}
 
-	if len(fieldMap) > 0 || f.Config.IncludeEmptyFields {
+	if len(fieldMap) > 0 || f.config.IncludeEmptyFields {
 		payload["fields"] = fieldMap
 	}
 }

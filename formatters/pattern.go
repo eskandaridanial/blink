@@ -7,7 +7,7 @@ import (
 	"github.com/eskandaridanial/blink/models"
 )
 
-// PatternParser handles text pattern parsing and placeholder substitution.
+// patternParser handles text pattern parsing and placeholder substitution.
 // It provides efficient parsing of format patterns with placeholder replacement,
 // optimized for minimal allocations and high performance.
 //
@@ -31,11 +31,11 @@ import (
 //   - Type-optimized value serialization for common types
 //   - Minimal pattern parsing overhead
 //   - Reuses buffer capacity across invocations
-type PatternParser struct {
-	Config Config
+type patternParser struct {
+	config Config
 }
 
-// NewPatternParser creates a new pattern parser with the specified configuration.
+// newPatternParser creates a new pattern parser with the specified configuration.
 // The parser uses the configuration to access the text pattern and field inclusion settings.
 //
 // Parameters:
@@ -44,12 +44,12 @@ type PatternParser struct {
 //
 // Returns:
 //
-//	*PatternParser: New pattern parser instance
-func NewPatternParser(config Config) *PatternParser {
-	return &PatternParser{Config: config}
+//	*patternParser: New pattern parser instance
+func newPatternParser(config Config) *patternParser {
+	return &patternParser{config: config}
 }
 
-// Format applies the configured pattern to format a log record into the provided buffer.
+// format applies the configured pattern to format a log record into the provided buffer.
 // This method performs placeholder substitution and builds the complete formatted output.
 // The output is guaranteed to end with a newline character.
 //
@@ -73,8 +73,8 @@ func NewPatternParser(config Config) *PatternParser {
 //   - Direct buffer operations avoid string allocations
 //   - Type-optimized serialization for field values
 //   - Minimal parsing overhead with single-pass algorithm
-func (p *PatternParser) Format(buf []byte, r models.Record) []byte {
-	pattern := p.Config.TextPattern
+func (p *patternParser) format(buf []byte, r models.Record) []byte {
+	pattern := p.config.TextPattern
 	i := 0
 
 	for i < len(pattern) {
@@ -128,10 +128,10 @@ func (p *PatternParser) Format(buf []byte, r models.Record) []byte {
 // Returns:
 //
 //	[]byte: Buffer with field value appended (may have grown)
-func (p *PatternParser) appendField(buf []byte, fieldName string, r models.Record) []byte {
+func (p *patternParser) appendField(buf []byte, fieldName string, r models.Record) []byte {
 	switch fieldName {
 	case "timestamp":
-		return append(buf, r.Timestamp.Format(p.Config.TimeFormat)...)
+		return append(buf, r.Timestamp.Format(p.config.TimeFormat)...)
 
 	case "level":
 		return append(buf, r.Level.String()...)
@@ -171,14 +171,14 @@ func (p *PatternParser) appendField(buf []byte, fieldName string, r models.Recor
 // Returns:
 //
 //	[]byte: Buffer with formatted fields appended (may have grown)
-func (p *PatternParser) appendFields(buf []byte, fields []models.Field) []byte {
-	if len(fields) == 0 && !p.Config.IncludeEmptyFields {
+func (p *patternParser) appendFields(buf []byte, fields []models.Field) []byte {
+	if len(fields) == 0 && !p.config.IncludeEmptyFields {
 		return buf
 	}
 
 	first := true
 	for _, field := range fields {
-		if field.Key == "" && !p.Config.IncludeEmptyFields {
+		if field.Key == "" && !p.config.IncludeEmptyFields {
 			continue
 		}
 
@@ -225,7 +225,7 @@ func (p *PatternParser) appendFields(buf []byte, fields []models.Field) []byte {
 //   - Uses strconv.Append* functions to avoid string allocations
 //   - Only falls back to fmt.Sprintf for uncommon types
 //   - Direct buffer operations minimize memory copying
-func (p *PatternParser) appendFieldValue(buf []byte, value any) []byte {
+func (p *patternParser) appendFieldValue(buf []byte, value any) []byte {
 	switch v := value.(type) {
 	case string:
 		return append(buf, v...)

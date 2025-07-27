@@ -49,12 +49,12 @@ type Config struct {
 
 	// TextPattern defines the output format for text formatter using placeholders.
 	// Available placeholders:
-	//   %{timestamp} - Formatted timestamp
-	//   %{level}     - Log level (DEBUG, INFO, WARN, ERROR, etc.)
+	//   %{timestamp}   - Formatted timestamp
+	//   %{level}       - Log level (DEBUG, INFO, WARN, ERROR, etc.)
 	//   %{referenceId} - Optional reference/correlation ID
-	//   %{caller}    - Optional caller information (file:line)
-	//   %{fields}    - Key-value pairs formatted as "key=value key2=value2"
-	//   %{message}   - The actual log message
+	//   %{caller}      - Optional caller information (file:line)
+	//   %{fields}      - Key-value pairs formatted as "key=value key2=value2"
+	//   %{message}     - The actual log message
 	// Environment variable: BLINK_TEXT_PATTERN
 	// Default: "%{timestamp} %{level} %{referenceId} %{caller} [%{fields}] - %{message}"
 	// Must not be empty
@@ -113,7 +113,7 @@ type ConfigBuilder struct {
 //	*ConfigBuilder: A new builder instance ready for configuration
 func NewConfigBuilder() *ConfigBuilder {
 	return &ConfigBuilder{
-		config: LoadConfig(),
+		config: loadConfig(),
 	}
 }
 
@@ -280,64 +280,7 @@ func (b *ConfigBuilder) Build() Config {
 //
 //	Config: Configuration struct with default values
 func DefaultConfig() Config {
-	return LoadConfig()
-}
-
-// LoadConfig loads configuration from environment variables with fallback to defaults.
-// Environment variables are parsed with type validation and invalid values fall back to defaults.
-// This function is safe to call multiple times and will always return a valid configuration.
-//
-// Environment variables read:
-//
-//	BLINK_WRITER_BUFFER_SIZE    - Writer buffer size in bytes
-//	BLINK_FORMAT_BUFFER_SIZE    - Format buffer size in bytes
-//	BLINK_PAYLOAD_POOL_SIZE     - Payload pool initial capacity
-//	BLINK_TIME_FORMAT           - Go time layout string
-//	BLINK_TEXT_PATTERN          - Text formatter pattern
-//	BLINK_JSON_ESCAPE_HTML      - Boolean for Html escaping
-//	BLINK_JSON_COMPACT          - Boolean for compact Json
-//	BLINK_INCLUDE_EMPTY_FIELDS  - Boolean for empty field inclusion
-//	BLINK_ENABLE_PANIC_RECOVERY - Boolean for panic recovery
-//
-// Returns:
-//
-//	Config: Configuration loaded from environment with defaults as fallback
-func LoadConfig() Config {
-	return Config{
-		WriterBufferSize:    getEnvInt("BLINK_WRITER_BUFFER_SIZE", 4096),
-		FormatBufferSize:    getEnvInt("BLINK_FORMAT_BUFFER_SIZE", 1024),
-		PayloadPoolSize:     getEnvInt("BLINK_PAYLOAD_POOL_SIZE", 8),
-		TimeFormat:          getEnvString("BLINK_TIME_FORMAT", "2006-01-02T15:04:05.000Z07:00"),
-		TextPattern:         getEnvString("BLINK_TEXT_PATTERN", "%{timestamp} %{level} %{referenceId} %{caller} [%{fields}] - %{message}"),
-		JsonEscapeHtml:      getEnvBool("BLINK_JSON_ESCAPE_HTML", false),
-		JsonCompact:         getEnvBool("BLINK_JSON_COMPACT", true),
-		IncludeEmptyFields:  getEnvBool("BLINK_INCLUDE_EMPTY_FIELDS", false),
-		EnablePanicRecovery: getEnvBool("BLINK_ENABLE_PANIC_RECOVERY", true),
-	}
-}
-
-// LoadConfigWithOverrides loads configuration from environment variables and applies
-// programmatic overrides using a callback function. This allows for hybrid configuration
-// where most settings come from environment variables but specific values are overridden in code.
-//
-// Parameters:
-//
-//	overrides func(*ConfigBuilder): Callback function to modify the loaded configuration
-//
-// Returns:
-//
-//	Config: Final configuration with environment values and overrides applied
-//
-// Example:
-//
-//	config := LoadConfigWithOverrides(func(b *ConfigBuilder) {
-//	    b.WriterBufferSize(8192).JsonCompact(false)
-//	})
-func LoadConfigWithOverrides(overrides func(*ConfigBuilder)) Config {
-	envConfig := LoadConfig()
-	builder := &ConfigBuilder{config: envConfig}
-	overrides(builder)
-	return builder.Build()
+	return loadConfig()
 }
 
 // Clone creates a deep copy of the configuration.
@@ -359,6 +302,41 @@ func (c Config) Clone() Config {
 		IncludeEmptyFields:  c.IncludeEmptyFields,
 		EnablePanicRecovery: c.EnablePanicRecovery,
 	}
+}
+
+// LoadConfig loads configuration from environment variables with fallback to defaults.
+// Environment variables are parsed with type validation and invalid values fall back to defaults.
+// This function is safe to call multiple times and will always return a valid configuration.
+//
+// Environment variables read:
+//
+//	BLINK_WRITER_BUFFER_SIZE    - Writer buffer size in bytes
+//	BLINK_FORMAT_BUFFER_SIZE    - Format buffer size in bytes
+//	BLINK_PAYLOAD_POOL_SIZE     - Payload pool initial capacity
+//	BLINK_TIME_FORMAT           - Go time layout string
+//	BLINK_TEXT_PATTERN          - Text formatter pattern
+//	BLINK_JSON_ESCAPE_HTML      - Boolean for Html escaping
+//	BLINK_JSON_COMPACT          - Boolean for compact Json
+//	BLINK_INCLUDE_EMPTY_FIELDS  - Boolean for empty field inclusion
+//	BLINK_ENABLE_PANIC_RECOVERY - Boolean for panic recovery
+//
+// Returns:
+//
+//	Config: Configuration loaded from environment with defaults as fallback
+func loadConfig() Config {
+	config := Config{
+		PayloadPoolSize:     getEnvInt("BLINK_PAYLOAD_POOL_SIZE", 8),
+		WriterBufferSize:    getEnvInt("BLINK_WRITER_BUFFER_SIZE", 4096),
+		FormatBufferSize:    getEnvInt("BLINK_FORMAT_BUFFER_SIZE", 1024),
+		JsonCompact:         getEnvBool("BLINK_JSON_COMPACT", true),
+		JsonEscapeHtml:      getEnvBool("BLINK_JSON_ESCAPE_HTML", false),
+		IncludeEmptyFields:  getEnvBool("BLINK_INCLUDE_EMPTY_FIELDS", false),
+		EnablePanicRecovery: getEnvBool("BLINK_ENABLE_PANIC_RECOVERY", true),
+		TimeFormat:          getEnvString("BLINK_TIME_FORMAT", "2006-01-02T15:04:05.000Z07:00"),
+		TextPattern:         getEnvString("BLINK_TEXT_PATTERN", "%{timestamp} %{level} %{referenceId} %{caller} [%{fields}] - %{message}"),
+	}
+	config.validate()
+	return config
 }
 
 // validate checks if the configuration values are valid and consistent.

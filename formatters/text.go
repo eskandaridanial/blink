@@ -37,14 +37,14 @@ import (
 //
 //	All methods are thread-safe and can be called concurrently from multiple goroutines.
 type TextFormatter struct {
-	Config     Config         // Configuration controlling formatter behavior
-	WriterPool *WriterPool    // Pool of buffered writers for efficient I/O
-	BufferPool *BufferPool    // Pool of byte buffers for building output
-	Safety     *SafetyWrapper // Panic recovery wrapper for robustness
-	Parser     *PatternParser // Pattern parser for placeholder substitution
+	config     Config         // Configuration controlling formatter behavior
+	writerPool *writerPool    // Pool of buffered writers for efficient I/O
+	bufferPool *bufferPool    // Pool of byte buffers for building output
+	safety     *safetyWrapper // Panic recovery wrapper for robustness
+	parser     *patternParser // Pattern parser for placeholder substitution
 }
 
-// NewTextFormatter creates a new text formatter using environment configuration.
+// newTextFormatter creates a new text formatter using environment configuration.
 // This constructor loads configuration from environment variables and uses the
 // default text pattern for formatting output.
 //
@@ -57,7 +57,7 @@ type TextFormatter struct {
 //	formatter := NewTextFormatter()
 //	formatter.Format(os.Stdout, logRecord)
 func NewTextFormatter() *TextFormatter {
-	return NewTextFormatterWithConfig(LoadConfig())
+	return NewTextFormatterWithConfig(loadConfig())
 }
 
 // NewTextFormatterWithPattern creates a text formatter with a custom pattern.
@@ -77,7 +77,7 @@ func NewTextFormatter() *TextFormatter {
 //	formatter := NewTextFormatterWithPattern("[%{level}] %{timestamp} - %{message}")
 //	formatter.Format(os.Stdout, logRecord)
 func NewTextFormatterWithPattern(pattern string) *TextFormatter {
-	config := LoadConfig()
+	config := loadConfig()
 	if pattern != "" {
 		config.TextPattern = pattern
 	}
@@ -105,11 +105,11 @@ func NewTextFormatterWithPattern(pattern string) *TextFormatter {
 //	formatter := NewTextFormatterWithConfig(config)
 func NewTextFormatterWithConfig(config Config) *TextFormatter {
 	return &TextFormatter{
-		Config:     config,
-		WriterPool: NewWriterPool(config.WriterBufferSize),
-		BufferPool: NewBufferPool(config.FormatBufferSize),
-		Safety:     NewSafetyWrapper(config),
-		Parser:     NewPatternParser(config),
+		config:     config,
+		writerPool: newWriterPool(config.WriterBufferSize),
+		bufferPool: newBufferPool(config.FormatBufferSize),
+		safety:     newSafetyWrapper(config),
+		parser:     newPatternParser(config),
 	}
 }
 
@@ -140,19 +140,19 @@ func NewTextFormatterWithConfig(config Config) *TextFormatter {
 //   - Type-optimized field value serialization
 //   - Automatic panic recovery ensures robustness
 func (f *TextFormatter) Format(w io.Writer, r models.Record) (int, error) {
-	return f.Safety.WithRecovery(w, r, func() (int, error) {
-		bufWriter := f.WriterPool.Get()
+	return f.safety.withRecovery(w, r, func() (int, error) {
+		bufWriter := f.writerPool.get()
 		defer func() {
 			bufWriter.Flush()
-			f.WriterPool.Put(bufWriter)
+			f.writerPool.put(bufWriter)
 		}()
 		bufWriter.Reset(w)
 
-		bufPtr := f.BufferPool.Get()
+		bufPtr := f.bufferPool.get()
 		buf := (*bufPtr)[:0]
-		defer f.BufferPool.Put(bufPtr)
+		defer f.bufferPool.put(bufPtr)
 
-		buf = f.Parser.Format(buf, r)
+		buf = f.parser.format(buf, r)
 
 		return bufWriter.Write(buf)
 	})
